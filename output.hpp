@@ -2,7 +2,6 @@
 #include "parser.hpp"
 #include "disassembler.hpp"
 #include <fstream>
-#include <map>
 #include <ostream>
 #include <set>
 #include <stdexcept>
@@ -10,15 +9,16 @@
 #include <cstdint>
 #include <format>
 #include <algorithm>
+#include <unordered_map>
 
 namespace {
 
-std::map<uint32_t, std::string> MakeLabels(const ElfParser& elf) {
-  std::map<uint32_t, std::string> labels;
+std::unordered_map<uint32_t, std::string> MakeLabels(const ElfParser& elf) {
+  std::unordered_map<uint32_t, std::string> labels;
   auto better = [](const Symbol& cand, const Symbol& curr) {
     return (cand.type == 2 && curr.type != 2);
   };
-  std::map<uint32_t, Symbol> named;
+  std::unordered_map<uint32_t, Symbol> named;
   for (const auto& s : elf.symbols()) {
     if (s.name.empty() || s.type == 3 || s.type == 4) {
       continue;
@@ -50,12 +50,7 @@ std::map<uint32_t, std::string> MakeLabels(const ElfParser& elf) {
   return labels;
 }
 
-std::string CheckLabel(const std::map<uint32_t, std::string>& labels, uint32_t addr) {
-  auto it = labels.find(addr);
-  return it != labels.end() ? it->second : "?";
-}
- 
-void WriteText(std::ostream& out, const ElfParser& elf, const std::map<uint32_t, std::string>& labels) {
+void WriteText(std::ostream& out, const ElfParser& elf, const std::unordered_map<uint32_t, std::string>& labels) {
   out << ".text\n";
   const auto& text = elf.text();
   const uint32_t base = elf.TextAddr();
@@ -91,13 +86,13 @@ void WriteText(std::ostream& out, const ElfParser& elf, const std::map<uint32_t,
         out << std::format(" {:05x}:\t{:08x}\t{:>7}\t{}, {}({})\n", addr, word, d.str_name, ToABI(d.rs2), d.imm, ToABI(d.rs1));
         break;
       case Decoded::Type::B:
-        out << std::format(" {:05x}:\t{:08x}\t{:>7}\t{}, {}, {} ; 0x{:x}\n", addr, word, d.str_name, ToABI(d.rs1), ToABI(d.rs2), CheckLabel(labels, d.target), d.target);
+        out << std::format(" {:05x}:\t{:08x}\t{:>7}\t{}, {}, {} ; 0x{:x}\n", addr, word, d.str_name, ToABI(d.rs1), ToABI(d.rs2), labels.find(d.target)->second, d.target);
         break;
       case Decoded::Type::U:
         out << std::format(" {:05x}:\t{:08x}\t{:>7}\t{}, {}\n", addr, word, d.str_name, ToABI(d.rd), d.imm);
         break;
       case Decoded::Type::J:
-        out << std::format(" {:05x}:\t{:08x}\t{:>7}\t{}, {} ; 0x{:x}\n", addr, word, d.str_name, ToABI(d.rd), CheckLabel(labels, d.target), d.target);
+        out << std::format(" {:05x}:\t{:08x}\t{:>7}\t{}, {} ; 0x{:x}\n", addr, word, d.str_name, ToABI(d.rd), labels.find(d.target)->second, d.target);
         break;
       case Decoded::Type::UNKNOWN:
         out << std::format(" {:05x}:\t{:08x}\t{:>7}\n", addr, word, "unknown_instruction");
